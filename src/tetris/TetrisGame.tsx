@@ -19,41 +19,40 @@ const INITIAL_DROP_INTERVAL = 1000;
 const MIN_DROP_INTERVAL = 100;
 
 export function TetrisGame() {
-  const [gameState, setGameState] = useState<GameState>(() => ({
-    board: createBoard(),
-    currentPiece: null,
-    nextPiece: null,
-    score: 0,
-    isPaused: false,
-    isGameOver: false
-  }));
-
-  const [dropInterval, setDropInterval] = useState(INITIAL_DROP_INTERVAL);
-  const gameLoopRef = useRef<number | null>(null);
-  const lastDropTimeRef = useRef<number>(Date.now());
-
-  // Initialize game
-  const initGame = useCallback(() => {
+  const getInitialGameState = (): GameState => {
     const board = createBoard();
     const nextType = getRandomTetrominoType();
     const nextPiece = createPiece(nextType);
     const firstType = getRandomTetrominoType();
     const currentPiece = createPiece(firstType);
-
-    setGameState({
+    return {
       board,
       currentPiece,
       nextPiece,
       score: 0,
       isPaused: false,
       isGameOver: false
-    });
-    setDropInterval(INITIAL_DROP_INTERVAL);
+    };
+  };
+
+  const [gameState, setGameState] = useState<GameState>(getInitialGameState);
+
+  const [dropInterval, setDropInterval] = useState(INITIAL_DROP_INTERVAL);
+  const gameLoopRef = useRef<number | null>(null);
+  const lastDropTimeRef = useRef<number>(0);
+  const gameStateRef = useRef(gameState);
+
+  // Set initial time on mount
+  useEffect(() => {
+    lastDropTimeRef.current = Date.now();
   }, []);
+
+
 
   // Lock current piece and spawn next
   const lockAndSpawn = useCallback(() => {
-    const { currentPiece, nextPiece, board, score } = gameState;
+    const state = gameStateRef.current;
+    const { currentPiece, nextPiece, board, score } = state;
 
     if (!currentPiece || !nextPiece) return;
 
@@ -89,124 +88,133 @@ export function TetrisGame() {
       score: newScore
     }));
     setDropInterval(newInterval);
+   }, []);
+
+
+   // Sync ref with state
+  useEffect(() => {
+    gameStateRef.current = gameState;
   }, [gameState]);
 
-  // Game loop
-  useEffect(() => {
-    if (!gameState.currentPiece || gameState.isPaused || gameState.isGameOver) {
-      return;
-    }
-
-    const gameLoop = (timestamp: number) => {
-      if (gameState.isPaused || gameState.isGameOver) {
-        gameLoopRef.current = null;
+    // Game loop
+    useEffect(() => {
+      if (!gameStateRef.current.currentPiece || gameState.isPaused || gameState.isGameOver) {
         return;
       }
 
-      const elapsed = timestamp - lastDropTimeRef.current;
+     const gameLoop = (timestamp: number) => {
+       if (gameStateRef.current.isPaused || gameStateRef.current.isGameOver) {
+         gameLoopRef.current = null;
+         return;
+       }
 
-      if (elapsed >= dropInterval) {
-        lastDropTimeRef.current = timestamp;
+       const elapsed = timestamp - lastDropTimeRef.current;
 
-        const { currentPiece, board } = gameState;
-        if (!currentPiece) return;
+       if (elapsed >= dropInterval) {
+         lastDropTimeRef.current = timestamp;
 
-        // Try to move piece down
-        if (isValidPosition(board, currentPiece, 0, 1)) {
-          const movedPiece = movePiece(currentPiece, 0, 1);
-          setGameState(prev => ({ ...prev, currentPiece: movedPiece }));
-        } else {
-          // Can't move down - lock the piece
-          lockAndSpawn();
-        }
-      }
+         const { currentPiece, board } = gameStateRef.current;
+         if (!currentPiece) return;
 
-      gameLoopRef.current = requestAnimationFrame(gameLoop);
-    };
+         // Try to move piece down
+         if (isValidPosition(board, currentPiece, 0, 1)) {
+           const movedPiece = movePiece(currentPiece, 0, 1);
+           setGameState(prev => ({ ...prev, currentPiece: movedPiece }));
+         } else {
+           // Can't move down - lock the piece
+           lockAndSpawn();
+         }
+       }
 
-    gameLoopRef.current = requestAnimationFrame(gameLoop);
+       gameLoopRef.current = requestAnimationFrame(gameLoop);
+     };
 
-    return () => {
-      if (gameLoopRef.current) {
-        cancelAnimationFrame(gameLoopRef.current);
-      }
-    };
-  }, [dropInterval, gameState.isPaused, gameState.isGameOver, lockAndSpawn]);
+     gameLoopRef.current = requestAnimationFrame(gameLoop);
 
-  // Keyboard controls
+     return () => {
+       if (gameLoopRef.current) {
+         cancelAnimationFrame(gameLoopRef.current);
+       }
+     };
+    }, [dropInterval, gameState.isPaused, gameState.isGameOver, lockAndSpawn]);
+
+   // Keyboard controls
+   useEffect(() => {
+     const handleKeyDown = (e: KeyboardEvent) => {
+       const state = gameStateRef.current;
+       if (state.isGameOver) return;
+
+       if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+         setGameState(prev => ({ ...prev, isPaused: !prev.isPaused }));
+         return;
+       }
+
+       if (state.isPaused) return;
+
+       if (!state.currentPiece) return;
+
+       const { currentPiece, board } = state;
+       let newPiece: Piece | null = null;
+
+       switch (e.key) {
+         case 'ArrowLeft':
+           if (isValidPosition(board, currentPiece, -1, 0)) {
+             newPiece = movePiece(currentPiece, -1, 0);
+           }
+           break;
+
+         case 'ArrowRight':
+           if (isValidPosition(board, currentPiece, 1, 0)) {
+             newPiece = movePiece(currentPiece, 1, 0);
+           }
+           break;
+
+         case 'ArrowDown':
+           if (isValidPosition(board, currentPiece, 0, 1)) {
+             newPiece = movePiece(currentPiece, 0, 1);
+           } else {
+             lockAndSpawn();
+           }
+           break;
+
+         case 'ArrowUp':
+           if (canRotate(board, currentPiece)) {
+             newPiece = rotatePiece(currentPiece);
+           }
+           break;
+
+         case ' ':
+           // Hard drop
+           {
+             e.preventDefault();
+             let dropPiece = currentPiece;
+             while (isValidPosition(board, dropPiece, 0, 1)) {
+               dropPiece = movePiece(dropPiece, 0, 1);
+             }
+             newPiece = dropPiece;
+             // Lock after hard drop
+             setTimeout(() => lockAndSpawn(), 0);
+           }
+           break;
+       }
+
+       if (newPiece) {
+         setGameState(prev => ({ ...prev, currentPiece: newPiece }));
+       }
+     };
+
+     window.addEventListener('keydown', handleKeyDown);
+     return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [lockAndSpawn, gameStateRef]);
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (gameState.isGameOver) return;
-
-      if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-        setGameState(prev => ({ ...prev, isPaused: !prev.isPaused }));
-        return;
-      }
-
-      if (gameState.isPaused) return;
-
-      if (!gameState.currentPiece) return;
-
-      const { currentPiece, board } = gameState;
-      let newPiece: Piece | null = null;
-
-      switch (e.key) {
-        case 'ArrowLeft':
-          if (isValidPosition(board, currentPiece, -1, 0)) {
-            newPiece = movePiece(currentPiece, -1, 0);
-          }
-          break;
-
-        case 'ArrowRight':
-          if (isValidPosition(board, currentPiece, 1, 0)) {
-            newPiece = movePiece(currentPiece, 1, 0);
-          }
-          break;
-
-        case 'ArrowDown':
-          if (isValidPosition(board, currentPiece, 0, 1)) {
-            newPiece = movePiece(currentPiece, 0, 1);
-          } else {
-            lockAndSpawn();
-          }
-          break;
-
-        case 'ArrowUp':
-          if (canRotate(board, currentPiece)) {
-            newPiece = rotatePiece(currentPiece);
-          }
-          break;
-
-        case ' ':
-          // Hard drop
-          e.preventDefault();
-          let dropPiece = currentPiece;
-          while (isValidPosition(board, dropPiece, 0, 1)) {
-            dropPiece = movePiece(dropPiece, 0, 1);
-          }
-          newPiece = dropPiece;
-          // Lock after hard drop
-          setTimeout(() => lockAndSpawn(), 0);
-          break;
-      }
-
-      if (newPiece) {
-        setGameState(prev => ({ ...prev, currentPiece: newPiece }));
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, lockAndSpawn]);
-
-  // Start game on mount
-  useEffect(() => {
-    initGame();
-  }, []);
+    gameStateRef.current = gameState;
+  }, [gameState]);
 
   // Restart game
   const restartGame = () => {
-    initGame();
+    setGameState(getInitialGameState());
+    setDropInterval(INITIAL_DROP_INTERVAL);
   };
 
   return (
