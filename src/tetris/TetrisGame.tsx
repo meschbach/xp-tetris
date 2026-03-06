@@ -44,7 +44,7 @@ export function TetrisGame() {
 
   // Set initial time on mount
   useEffect(() => {
-    lastDropTimeRef.current = Date.now();
+    lastDropTimeRef.current = performance.now();
   }, []);
 
 
