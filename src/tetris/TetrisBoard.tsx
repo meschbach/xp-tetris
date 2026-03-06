@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useEffect, forwardRef } from 'react';
 import * as d3 from 'd3';
 import type { Board, Piece } from '../tetris';
 import { CELL_SIZE, BOARD_HEIGHT, BOARD_WIDTH } from '../tetris';
@@ -8,13 +8,11 @@ interface TetrisBoardProps {
   currentPiece: Piece | null;
 }
 
-export function TetrisBoard({ board, currentPiece }: TetrisBoardProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
-
+export const TetrisBoard = forwardRef<SVGSVGElement, TetrisBoardProps>(({ board, currentPiece }, ref) => {
   useEffect(() => {
-    if (!svgRef.current) return;
+    if (!ref || !('current' in ref) || !ref.current) return;
 
-    const svg = d3.select(svgRef.current);
+    const svg = d3.select(ref.current);
     svg.selectAll('*').remove();
 
     // Draw board background grid
@@ -51,7 +49,7 @@ export function TetrisBoard({ board, currentPiece }: TetrisBoardProps) {
           .attr('y', y)
           .attr('width', CELL_SIZE)
           .attr('height', CELL_SIZE)
-          .attr('fill', currentPiece.type === 'I' ? '#00f0f0' : 
+          .attr('fill', currentPiece.type === 'I' ? '#00f0f0' :
                  currentPiece.type === 'O' ? '#f0f000' :
                  currentPiece.type === 'T' ? '#a000f0' :
                  currentPiece.type === 'S' ? '#00f000' :
@@ -81,14 +79,14 @@ export function TetrisBoard({ board, currentPiece }: TetrisBoardProps) {
         .attr('stroke', '#444')
         .attr('stroke-width', 0.5);
     }
-  }, [board, currentPiece]);
+  }, [board, currentPiece, ref]);
 
   return (
     <svg
-      ref={svgRef}
+      ref={ref}
       width={BOARD_WIDTH * CELL_SIZE}
       height={BOARD_HEIGHT * CELL_SIZE}
-      style={{ border: '2px solid #666', borderRadius: '4px' }}
+      style={{ border: '2px solid #666', borderRadius: '4px', touchAction: 'none' }}
     />
   );
-}
+});

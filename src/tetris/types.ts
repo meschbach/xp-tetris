@@ -3,6 +3,10 @@ export const BOARD_WIDTH = 10;
 export const BOARD_HEIGHT = 20;
 export const CELL_SIZE = 30;
 
+// Swipe detection constants
+export const SWIPE_MIN_DISTANCE = 30; // Minimum distance in pixels to qualify as a swipe
+export const SWIPE_MAX_DURATION = 500; // Maximum duration in ms for a swipe
+
 // Tetromino shapes (each shape is an array of [row, col] coordinates relative to pivot)
 export const TETROMINOES = {
   I: {
